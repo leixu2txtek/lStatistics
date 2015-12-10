@@ -1,0 +1,21 @@
+.footer {
+    margin-top: 30px;
+    padding-top: 10px;
+    color: #999;
+    border-top: solid 1px #ddd;
+}
+
+.footer > p {
+    padding-top: 4px !important;
+    padding-bottom: 4px !important;
+}
+
+h5 {
+    width: 100%;
+    white-space: nowrap;
+    margin-bottom: 4px;
+}
+
+legend {
+    font-family: 'Andika';
+}
