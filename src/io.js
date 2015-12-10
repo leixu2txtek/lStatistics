@@ -1,153 +1,163 @@
-exports.io = io = require('socket.io').listen(httpServer.server);
+/* global httpServer */
+var mongoClient = require('mongodb').MongoClient,
+    _config = require('../_config.js'),
+    cookieParser = require('cookie-parser'),
+    moment = require('moment'),
+    io = require('socket.io')(),
+    urlParser = require('url');
 
-mongoClient = require('mongodb').MongoClient;
+//将 socket.io 监听到该 http 服务
+io.listen(httpServer);
 
-var url_parser = require('url');
+//配置
+io.use(function (socket, next) {
+    var handshakeData = socket.request;
 
-var cookie = require('cookie');
-
-
-io.configure(function () {
-
-});
-
-io.set('authorization', function (handshakeData, accept) {
     if (handshakeData.headers.cookie) {
-        accept(null, true);
+        next();
     } else {
-        return accept('No cookie transmitted.', false);
+        next(new Error('No cookie transmitted.'));
     }
 });
 
+//connection
 io.of('/pv').on('connection', function (socket) {
-    socket.on('message', function (message) {
 
-        var url;
+    //got a message of pv
+    socket.on('message', function (message) {
+        var url = {};
 
         try {
-            url = url_parser.parse(message.url);
-        }
-        catch (err) {
+
+            url = urlParser.parse(message.url);
+
+        } catch (err) {
+
+            //TODO log
+
             return;
         }
 
-        var host = url.host;
-        socket.join(host);
+        var host = url.host,
+            uid = message.userId,
+            ip = socket.handshake.address.replace('::ffff:', ''),
+            socketId = socket.id,
+            date_in = new Date();
 
-        var uid = message.userId;
-
-        socket.tj_uid = uid ? uid : message.cookie;
-        socket.tj_host = host;
-
-        var ip = socket.handshake.address.address;
-        var socketid = socket.id;
+        socket.s_uid = uid ? uid : message.cookie;
+        socket.s_host = host;
+        socket.s_date_in = date_in;
 
         io.of('/stat').emit('pageview', {
-            'connections': io.of('/pv').clients().length,
+            'connections': io.of('/pv').sockets.length,
             'ip': ip,
-            'id': socket.id,
+            'id': socketId,
             'url': message.url,
             'xdomain': socket.handshake.xdomain,
             'timestamp': new Date()
         });
 
-        mongoClient.connect(config.conn_str, function (err, db) {
+        //写入数据库
+        mongoClient.connect(_config.mongodb_url, function (err, db) {
             if (err) throw err;
 
-            var collection_pageview = db.collection('pageview');
+            var time = moment();
 
-            var dt = new Date();
-            var hour = dt.getHours();
-            hour = (hour < 10 ? "0" : "") + hour;
-            var min = dt.getMinutes();
-            min = (min < 10 ? "0" : "") + min;
-            var sec = dt.getSeconds();
-            sec = (sec < 10 ? "0" : "") + sec;
-
-            collection_pageview.insert({
+            db.collection('pageview').insertOne({
                 uid: uid,
                 userType: message.userType,
                 schoolCode: message.schoolCode,
                 campuszoneId: message.campuszoneId,
                 classId: message.classId,
                 host: host,
-                url: url.pathname,
-                search: url.search,
-                hash: url.hash,
+                url: url.pathname || '',
+                search: url.search || '',
+                hash: url.hash || '',
                 ip: ip,
                 referrer: message.referrer,
                 title: message.title,
-                year: dt.getFullYear(),
-                month: dt.getMonth(),
-                day: dt.getDate(),
-                time: hour + ':' + min + ':' + sec,
-                socketid: socketid,
-                date_in: dt,
+                year: time.year(),
+                month: time.month(),
+                day: time.day(),
+                time: time.format('HH:mm:ss'),
+                socketId: socketId,
+                date_in: date_in,
                 active: 1
-            }, { w: 1 }, function () {
-                update_visitor_onconnect(db, socketid, socket.tj_uid, host);
-            });
+            }, { w: 1 }, function (err, r) {
+                if (err) throw err;
+
+                //update user onconnect
+                update_on_connect(db, socketId, socket.s_uid, socket.s_host);
+            })
         });
     });
 
+    //disconnect
     socket.on('disconnect', function () {
-        var socketid = socket.id;
-        var tj_uid = socket.tj_uid;
-        var tj_host = socket.tj_host;
-
-        mongoClient.connect(config.conn_str, function (err, db) {
-            if (err) throw err;
-
-            var collection_pageview = db.collection('pageview');
-            collection_pageview.findOne({ socketid: socketid }, function (err, item) {
-                if (item) {
-                    var dt = new Date();
-                    collection_pageview.update({ _id: item._id }, {
-                        $set: { date_out: dt, active: 0, duration: (dt - item.date_in) / 1000 }
-                    }, { w: 1 }, function () {
-                        update_visitor_ondisconnect(db, socketid, tj_uid, tj_host);
-                    });
-                } else {
-                    update_visitor_ondisconnect(db, socketid, tj_uid, tj_host);
-                }
-            });
-        });
+        var socketId = socket.id;
 
         io.of('/stat').emit('pageview', {
-            'connections': Math.max(io.of('/pv').clients().length - 1, 0),
-            'id': socketid
+            'connections': Math.max(io.of('/pv').sockets.length - 1, 0),
+            'id': socketId
+        });
+
+        mongoClient.connect(_config.mongodb_url, function (err, db) {
+            if (err) throw err;
+
+            var dt = moment();
+
+            db.collection('pageview').updateMany({
+                socketId: socketId
+            }, {
+                $set: {
+                    date_out: dt._d,
+                    active: 0,
+                    duration: dt.diff(socket.s_date_in) / 1000
+                },
+                $currentDate: { lastModified: true }
+            }, function (err, r) {
+                if (err) throw err;
+
+                //update user disconnect
+                update_on_disconnect(db, socketId, socket.s_uid, socket.s_host);
+            });
         });
     });
 });
 
-var update_visitor_onconnect = function (db, socketid, tj_uid, tj_host) {
-    var collection_visitor = db.collection('visitor');
-    collection_visitor.findOne({ uid: tj_uid, host: tj_host }, function (err, item) {
+//用户上线后更新用户访问页
+var update_on_connect = function (db, socketId, s_uid, s_host) {
 
-        if (item) {
-            collection_visitor.update({ _id: item._id }, {
-                $addToSet: { sockets: socketid }
-            }, { w: 1 }, function () {
-                db.close();
-            });
-        } else {
-            db.close();
-        }
+    db.collection('visitor').findOneAndUpdate({
+        uid: s_uid,
+        host: s_host
+    }, {
+        $addToSet: {
+            sockets: socketId
+        },
+        $currentDate: { lastModified: true }
+    }, function (err, r) {
+        if (err) throw err;
+
+        db.close();
     });
+
 };
 
-var update_visitor_ondisconnect = function (db, socketid, tj_uid, tj_host) {
-    var collection_visitor = db.collection('visitor');
-    collection_visitor.findOne({ uid: tj_uid, host: tj_host }, function (err, item) {
-        if (item) {
-            collection_visitor.update({ _id: item._id }, {
-                $pull: { sockets: socketid }
-            }, { w: 1 }, function () {
-                db.close();
-            });
-        }
-        else {
-            db.close();
-        }
+//用户下线后更新用户访问页
+var update_on_disconnect = function (db, socketId, s_uid, s_host) {
+
+    db.collection('visitor').findOneAndUpdate({
+        uid: s_uid,
+        host: s_host
+    }, {
+        $pull: {
+            sockets: socketId
+        },
+        $currentDate: { lastModified: true }
+    }, function (err, r) {
+        if (err) throw err;
+
+        db.close();
     });
 };
