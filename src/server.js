@@ -177,7 +177,7 @@ app.get('/', function (req, res) {
         if (err) throw err;
 
         var collection = db.collection('pageview'),
-            dt = new Date(),
+            dt = moment(),
             params = {},
             params_online = { 'sockets.0': { $exists: true } };
 
@@ -190,9 +190,9 @@ app.get('/', function (req, res) {
         collection.count(params, function (err, total) {
             if (err) throw err;
 
-            params.year = dt.getFullYear();
-            params.month = dt.getMonth();
-            params.day = dt.getDate();
+            params.year = dt.year();
+            params.month = dt.month();
+            params.day = dt.date();
 
             collection.count(params, function (err, today) {
                 if (err) throw err;

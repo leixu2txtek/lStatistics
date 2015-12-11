@@ -78,7 +78,7 @@ io.of('/pv').on('connection', function (socket) {
                 title: message.title,
                 year: time.year(),
                 month: time.month(),
-                day: time.day(),
+                day: time.date(),
                 time: time.format('HH:mm:ss'),
                 socketId: socketId,
                 date_in: date_in,
