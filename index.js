@@ -1,3 +1,4 @@
+/* global httpServer */
 var _config = require('./_config.js'),
 	http = require('http'),
 	app = require('./src/server.js');
@@ -6,7 +7,7 @@ var _config = require('./_config.js'),
 httpServer = http.createServer(app);
 
 //加载socket.io
-require('./src/_io.js');
+require('./src/io.js');
 
 //start the server
 httpServer.listen(_config.http_server_port || 2345, function () {

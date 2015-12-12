@@ -1,6 +1,5 @@
 var mongoClient = require('mongodb').MongoClient,
     express = require('express'),
-    fs = require('fs'),
     path = require('path'),
     _config = require('../_config.js'),
     uaParser = require('ua-parser'),
@@ -42,20 +41,20 @@ app.get('/boot.js', function (req, res) {
 
     var host = '';
     try {
-
         host = urlParser.parse(referer).host;
-
     } catch (err) {
-
         res.send({ code: 500, msg: 'Referrer Not Correct' });
-
         return;
     }
 
     if (!host) {
-
         res.send({ code: 500, msg: 'Referrer Not Correct' });
         return;
+    }
+
+    //校验 referrer 中域名或ip 是否在我们需要记录的表中
+    if (_config.hosts.indexOf(host) == -1) {
+        res.send({ code: 500, msg: 'Referrer Not Correct' });
     }
 
     var user = {},
@@ -76,11 +75,7 @@ app.get('/boot.js', function (req, res) {
             var collection = db.collection('visitor');
 
             //查找并更新属性
-            collection.findOneAndUpdate(
-                {
-                    uid: uid,
-                    host: host
-                },
+            collection.findOneAndUpdate({ uid: uid, host: host },
                 {
                     $set: { datecreated: new Date() },
                     $currentDate: { lastModified: true }
@@ -156,7 +151,7 @@ app.get('/boot.js', function (req, res) {
                         ua: uaParser.parseUA(ua),
                         os: uaParser.parseOS(ua),
                         device: uaParser.parseDevice(ua)
-                    }, { w: 1 }, function (err, r) {
+                    }, function (err, r) {
 
                         if (err) throw err;
 
@@ -176,36 +171,63 @@ app.get('/', function (req, res) {
     mongoClient.connect(_config.mongodb_url, function (err, db) {
         if (err) throw err;
 
-        var collection = db.collection('pageview'),
-            dt = moment(),
-            params = {},
-            params_online = { 'sockets.0': { $exists: true } };
-
-        //指定域名统计
-        if (req.query.host) {
-            params.host = params_online.host = req.query.host
-        }
+        var collection = db.collection('pageview.day'),
+            dt = moment();
 
         //总数
-        collection.count(params, function (err, total) {
+        collection.aggregate({
+            $match: { host: { $in: _config.hosts } }
+        }, {
+            $group: {
+                _id: '$host',
+                count: { $sum: '$total' }
+            }
+        }, function (err, total) {
             if (err) throw err;
 
-            params.year = dt.year();
-            params.month = dt.month();
-            params.day = dt.date();
+            var _total = 0;
 
-            collection.count(params, function (err, today) {
+            //因为存在多域名情况，比如 www.ahcjzx.cn、ahcjzx.cn、218.22.21.232
+            total.forEach(function (v) {
+                _total += v.count;
+            });
+
+            //查询今天的总数
+            collection.aggregate({
+                $match: {
+                    host: { $in: _config.hosts },
+                    date: dt.format('l')
+                }
+            }, {
+                $group: {
+                    _id: '$host',
+                    count: { $sum: '$total' }
+                }
+            }, function (err, today) {
                 if (err) throw err;
 
-                db.collection('visitor').count(params_online, function (err, online) {
+                var _today = 0;
+
+                //因为存在多域名情况，比如 www.ahcjzx.cn、ahcjzx.cn、218.22.21.232
+                today.forEach(function (v) {
+                    _today += v.count;
+                });
+
+                db.collection('visitor').count({
+                    host: { $in: _config.hosts },
+                    sockets: {
+                        $not: { $size: 0 }
+                    }
+                }, function (err, online) {
+
                     if (err) throw err;
 
                     db.close();
 
                     res.jsonp({
                         online: online,
-                        total: total,
-                        today: today
+                        total: _total,
+                        today: _today
                     });
                 });
             });
@@ -215,24 +237,21 @@ app.get('/', function (req, res) {
 
 //构造socket js
 var send_boot = function (res, user) {
+    var js = "var socket=io('{{url}}'),send=function(){socket.emit('message',{url:document.location.href,referrer:document.referrer,title:document.title,userId:'{{userName}}',userType:'{{userType}}',schoolCode:'{{schoolCode}}',campuszoneId:'{{campuszoneId}}',classId:'{{classId}}',cookie:'{{cookie}}',})};socket.on('connect',function(){send();window.onhashchange=send});";
 
-    fs.readFile(path.join(path.dirname(__dirname), 'public', 'js', 'boot.js'), 'utf8', function (err, data) {
-        if (err) throw err;
+    js = js.replace('{{url}}', _config.socket_url);
+    js = js.replace('{{userName}}', user.userName);
+    js = js.replace('{{userType}}', user.userType);
+    js = js.replace('{{schoolCode}}', user.schoolCode);
+    js = js.replace('{{campuszoneId}}', user.campuszoneId);
+    js = js.replace('{{classId}}', user.classId);
+    js = js.replace('{{cookie}}', user.cookie || '');
 
-        data = data.replace('{{url}}', _config.socket_url);
-        data = data.replace('{{userName}}', user.userName);
-        data = data.replace('{{userType}}', user.userType);
-        data = data.replace('{{schoolCode}}', user.schoolCode);
-        data = data.replace('{{campuszoneId}}', user.campuszoneId);
-        data = data.replace('{{classId}}', user.classId);
-        data = data.replace('{{cookie}}', user.cookie || '');
-
-        res.set('Content-Type', 'text/javascript');
-        res.send(data);
-    });
+    res.set('Content-Type', 'text/javascript');
+    res.send(js);
 };
 
-//定时取出创建时间小于当前时间3小时的用户，将其置于未在线状态
+//定时取出创建时间小于当前时间3小时的用户，将其置于离线状态
 setInterval(function () {
     mongoClient.connect(_config.mongodb_url, function (err, db) {
 
@@ -252,7 +271,9 @@ setInterval(function () {
 
         db.collection('visitor').update(
             {
-                'sockets.0': { $exists: true },
+                sockets: {
+                    $not: { $size: 0 }
+                },
                 'datecreated': { $lte: _utc_date }
             },
             {
@@ -263,7 +284,7 @@ setInterval(function () {
             }, { multi: true }, function (err, res) {
 
                 db.close();
-                console.log(moment().format('lll') + ' 共主动离线了' + res + '个在线用户');
+                console.log(moment().format('lll') + ' 共主动离线了' + res.n + '个在线用户');
             });
     });
 }, 1000 * 60 * 10);

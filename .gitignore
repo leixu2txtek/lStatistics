@@ -1,2 +1,5 @@
 .vscode/launch.json
 daemon/ahceo_pv.out.log
+daemon/ahceo_pv.err.log
+daemon/ahceo_pv.out.log
+*.log

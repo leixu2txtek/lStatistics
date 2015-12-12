@@ -1,7 +1,6 @@
 /* global httpServer */
 var mongoClient = require('mongodb').MongoClient,
     _config = require('../_config.js'),
-    cookieParser = require('cookie-parser'),
     moment = require('moment'),
     io = require('socket.io')(),
     urlParser = require('url');
@@ -83,12 +82,12 @@ io.of('/pv').on('connection', function (socket) {
                 socketId: socketId,
                 date_in: date_in,
                 active: 1
-            }, { w: 1 }, function (err, r) {
+            }, function (err, r) {
                 if (err) throw err;
 
                 //update user onconnect
                 update_on_connect(db, socketId, socket.s_uid, socket.s_host);
-            })
+            });
         });
     });
 
@@ -128,6 +127,7 @@ io.of('/pv').on('connection', function (socket) {
 //用户上线后更新用户访问页
 var update_on_connect = function (db, socketId, s_uid, s_host) {
 
+    //写入用户当前访问的页面的 socketId
     db.collection('visitor').findOneAndUpdate({
         uid: s_uid,
         host: s_host
@@ -139,9 +139,20 @@ var update_on_connect = function (db, socketId, s_uid, s_host) {
     }, function (err, r) {
         if (err) throw err;
 
-        db.close();
-    });
+        //更新今天的统计数
+        db.collection('pageview.day').update({
+            host: s_host,
+            date: moment().format('l')
+        }, {
+            $inc: { total: +1 } //在原来的数上 +1 
+        }, {
+            upsert: true
+        }, function (err, r) {
+            if (err) throw err;
 
+            db.close();
+        });
+    });
 };
 
 //用户下线后更新用户访问页
