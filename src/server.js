@@ -178,60 +178,60 @@ app.get('/', function (req, res) {
         collection.aggregate({
             $match: { host: { $in: _config.hosts } }
         }, {
-            $group: {
-                _id: '$host',
-                count: { $sum: '$total' }
-            }
-        }, function (err, total) {
-            if (err) throw err;
-
-            var _total = 0;
-
-            //因为存在多域名情况，比如 www.ahcjzx.cn、ahcjzx.cn、218.22.21.232
-            total.forEach(function (v) {
-                _total += v.count;
-            });
-
-            //查询今天的总数
-            collection.aggregate({
-                $match: {
-                    host: { $in: _config.hosts },
-                    date: dt.format('l')
-                }
-            }, {
                 $group: {
                     _id: '$host',
                     count: { $sum: '$total' }
                 }
-            }, function (err, today) {
+            }, function (err, total) {
                 if (err) throw err;
 
-                var _today = 0;
+                var _total = 0;
 
                 //因为存在多域名情况，比如 www.ahcjzx.cn、ahcjzx.cn、218.22.21.232
-                today.forEach(function (v) {
-                    _today += v.count;
+                total.forEach(function (v) {
+                    _total += v.count;
                 });
 
-                db.collection('visitor').count({
-                    host: { $in: _config.hosts },
-                    sockets: {
-                        $not: { $size: 0 }
+                //查询今天的总数
+                collection.aggregate({
+                    $match: {
+                        host: { $in: _config.hosts },
+                        date: dt.format('l')
                     }
-                }, function (err, online) {
+                }, {
+                        $group: {
+                            _id: '$host',
+                            count: { $sum: '$total' }
+                        }
+                    }, function (err, today) {
+                        if (err) throw err;
 
-                    if (err) throw err;
+                        var _today = 0;
 
-                    db.close();
+                        //因为存在多域名情况，比如 www.ahcjzx.cn、ahcjzx.cn、218.22.21.232
+                        today.forEach(function (v) {
+                            _today += v.count;
+                        });
 
-                    res.jsonp({
-                        online: online,
-                        total: _total,
-                        today: _today
+                        db.collection('visitor').count({
+                            host: { $in: _config.hosts },
+                            sockets: {
+                                $not: { $size: 0 }
+                            }
+                        }, function (err, online) {
+
+                            if (err) throw err;
+
+                            db.close();
+
+                            res.jsonp({
+                                online: online,
+                                total: _total,
+                                today: _today
+                            });
+                        });
                     });
-                });
             });
-        });
     });
 });
 
@@ -284,7 +284,7 @@ setInterval(function () {
             }, { multi: true }, function (err, res) {
 
                 db.close();
-                console.log(moment().format('lll') + ' 共主动离线了' + res.n + '个在线用户');
+                console.log(moment().format('lll') + ' 共主动离线了' + res.nModified + '个在线用户');
             });
     });
 }, 1000 * 60 * 10);

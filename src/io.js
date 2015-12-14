@@ -27,13 +27,9 @@ io.of('/pv').on('connection', function (socket) {
         var url = {};
 
         try {
-
             url = urlParser.parse(message.url);
-
         } catch (err) {
-
-            //TODO log
-
+            console.log(err);
             return;
         }
 
