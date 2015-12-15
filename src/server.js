@@ -55,6 +55,7 @@ app.get('/boot.js', function (req, res) {
     //校验 referrer 中域名或ip 是否在我们需要记录的表中
     if (_config.hosts.indexOf(host) == -1) {
         res.send({ code: 500, msg: 'Referrer Not Correct' });
+        return;
     }
 
     var user = {},
