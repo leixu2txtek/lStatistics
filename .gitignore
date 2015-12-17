@@ -1,5 +1,6 @@
 .vscode/launch.json
-daemon/*.*
-node_modules/*.*
-typings/*.*
-lStatisitc/*.*
+daemon/
+node_modules/
+typings/
+lStatisitc/
+lStatisitc.rar
