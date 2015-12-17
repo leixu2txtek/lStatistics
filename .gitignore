@@ -2,3 +2,4 @@
 daemon/*.*
 node_modules/*.*
 typings/*.*
+lStatisitc/*.*
