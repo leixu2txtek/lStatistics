@@ -285,7 +285,7 @@ setInterval(function () {
             }, { multi: true }, function (err, res) {
 
                 db.close();
-                console.log(moment().format('lll') + ' 共主动离线了' + res.result.nModified + '个在线用户');
+                console.log(moment().format("YYYY-MM-DD HH:mm:ss") + ' 共主动离线了' + res.result.nModified + '个在线用户');
             });
     });
 }, 1000 * 60 * 10);
