@@ -12,7 +12,7 @@ var mongoClient = require('mongodb').MongoClient,
 app.use(cookieParser());
 
 //use crossdomain
-app.use(function (req, res, next) {
+app.use(function(req, res, next) {
 
     // Website you wish to allow to connect
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -30,7 +30,7 @@ app.use(function (req, res, next) {
 app.use('/static', express.static(path.join(path.dirname(__dirname), 'public')));
 
 //输出统计js
-app.get('/boot.js', function (req, res) {
+app.get('/boot.js', function(req, res) {
 
     var referer = req.get('Referrer');
 
@@ -70,7 +70,7 @@ app.get('/boot.js', function (req, res) {
     if (uid) {
 
         //查询用户，如果没有查找到就新增一条数据
-        mongoClient.connect(_config.mongodb_url, function (err, db) {
+        mongoClient.connect(_config.mongodb_url, function(err, db) {
             if (err) throw err;
 
             var collection = db.collection('visitor');
@@ -80,7 +80,7 @@ app.get('/boot.js', function (req, res) {
                 {
                     $set: { datecreated: new Date() },
                     $currentDate: { lastModified: true }
-                }, function (err, r) {
+                }, function(err, r) {
                     if (err) throw err;
 
                     //没有查找到，则更新一个新的数据进去
@@ -97,7 +97,7 @@ app.get('/boot.js', function (req, res) {
                             ua: uaParser.parseUA(ua),
                             os: uaParser.parseOS(ua),
                             device: uaParser.parseDevice(ua)
-                        }, { w: 1 }, function (err, r) {
+                        }, { w: 1 }, function(err, r) {
 
                             if (err) throw err;
 
@@ -127,11 +127,11 @@ app.get('/boot.js', function (req, res) {
         }
 
         //查询用户，如果没有查找到就新增一条数据
-        mongoClient.connect(_config.mongodb_url, function (err, db) {
+        mongoClient.connect(_config.mongodb_url, function(err, db) {
             if (err) throw err;
 
             var collection = db.collection('visitor');
-            collection.count({ uid: uid, host: host }, function (err, count) {
+            collection.count({ uid: uid, host: host }, function(err, count) {
 
                 if (err) throw err;
 
@@ -152,7 +152,7 @@ app.get('/boot.js', function (req, res) {
                         ua: uaParser.parseUA(ua),
                         os: uaParser.parseOS(ua),
                         device: uaParser.parseDevice(ua)
-                    }, function (err, r) {
+                    }, function(err, r) {
 
                         if (err) throw err;
 
@@ -167,9 +167,9 @@ app.get('/boot.js', function (req, res) {
 });
 
 //统计接口
-app.get('/', function (req, res) {
+app.get('/', function(req, res) {
 
-    mongoClient.connect(_config.mongodb_url, function (err, db) {
+    mongoClient.connect(_config.mongodb_url, function(err, db) {
         if (err) throw err;
 
         var collection = db.collection('pageview.day'),
@@ -183,13 +183,13 @@ app.get('/', function (req, res) {
                     _id: '$host',
                     count: { $sum: '$total' }
                 }
-            }, function (err, total) {
+            }, function(err, total) {
                 if (err) throw err;
 
                 var _total = 0;
 
                 //因为存在多域名情况，比如 www.ahcjzx.cn、ahcjzx.cn、218.22.21.232
-                total.forEach(function (v) {
+                total.forEach(function(v) {
                     _total += v.count;
                 });
 
@@ -204,13 +204,13 @@ app.get('/', function (req, res) {
                             _id: '$host',
                             count: { $sum: '$total' }
                         }
-                    }, function (err, today) {
+                    }, function(err, today) {
                         if (err) throw err;
 
                         var _today = 0;
 
                         //因为存在多域名情况，比如 www.ahcjzx.cn、ahcjzx.cn、218.22.21.232
-                        today.forEach(function (v) {
+                        today.forEach(function(v) {
                             _today += v.count;
                         });
 
@@ -219,7 +219,7 @@ app.get('/', function (req, res) {
                             sockets: {
                                 $not: { $size: 0 }
                             }
-                        }, function (err, online) {
+                        }, function(err, online) {
 
                             if (err) throw err;
 
@@ -236,8 +236,34 @@ app.get('/', function (req, res) {
     });
 });
 
+//获取在线用户UserId
+app.get('/users', function(req, res) {
+
+    mongoClient.connect(_config.mongodb_url, function(err, db) {
+        if (err) throw err;
+
+        var collection = db.collection('visitor');
+
+        collection.find({
+            host: { $in: _config.hosts },
+            sockets: {
+                $not: { $size: 0 }
+            }
+        }).toArray(function(err, online) {
+            var data = [];
+
+            online.forEach(function(e) {
+                data.push(e.uid);
+            }, this);
+
+            res.send(JSON.stringify(data));
+        });
+    });
+
+});
+
 //构造socket js
-var send_boot = function (res, user) {
+var send_boot = function(res, user) {
     var js = "var socket=io('{{url}}'),send=function(){socket.emit('message',{url:document.location.href,referrer:document.referrer,title:document.title,userId:'{{userName}}',userType:'{{userType}}',schoolCode:'{{schoolCode}}',campuszoneId:'{{campuszoneId}}',classId:'{{classId}}',cookie:'{{cookie}}',})};socket.on('connect',function(){send();window.onhashchange=send});";
 
     js = js.replace('{{url}}', _config.socket_url);
@@ -253,8 +279,8 @@ var send_boot = function (res, user) {
 };
 
 //定时取出创建时间小于当前时间3小时的用户，将其置于离线状态
-setInterval(function () {
-    mongoClient.connect(_config.mongodb_url, function (err, db) {
+setInterval(function() {
+    mongoClient.connect(_config.mongodb_url, function(err, db) {
 
         if (err) throw err;
 
@@ -282,7 +308,7 @@ setInterval(function () {
                     sockets: [] //将sockets 置为空数组即代表离线
                 },
                 $currentDate: { lastModified: true }
-            }, { multi: true }, function (err, res) {
+            }, { multi: true }, function(err, res) {
 
                 db.close();
                 console.log(moment().format("YYYY-MM-DD HH:mm:ss") + ' 共主动离线了' + res.result.nModified + '个在线用户');
