@@ -1,4 +1,3 @@
-/* global httpServer */
 var mongoClient = require('mongodb').MongoClient,
     _config = require('../_config.js'),
     moment = require('moment'),
