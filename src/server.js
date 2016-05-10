@@ -1,13 +1,12 @@
 var express = require('express'),
-    path = require('path'),
     _config = require('../_config.js'),
     url = require('url'),
     cookie = require('cookie-parser'),
     moment = require('moment'),
     app = express(),
-    redis = require("redis");
+    redis = require('redis');
 
-const util = require("util");
+const util = require('util');
 
 //use cookie 
 app.use(cookie());
@@ -27,9 +26,6 @@ app.use(function (req, res, next) {
     // Pass to next layer of middleware
     next();
 });
-
-//static directory
-app.use('/static', express.static(path.join(path.dirname(__dirname), 'public')));
 
 //send boot.js
 app.get('/boot.js', function (req, res) {
@@ -69,7 +65,7 @@ app.get('/boot.js', function (req, res) {
 
     var user = {},
         uid = '',
-        client = redis.createClient(_config.redis_url);;
+        client = redis.createClient(_config.redis_url);
 
     user.userName = uid = req.query.userName || '';
     user.userType = req.query.userType || '';
@@ -77,23 +73,9 @@ app.get('/boot.js', function (req, res) {
     user.campuszoneId = req.query.campuszoneId || '';
     user.classId = req.query.classId || '';
 
-    if (uid) {
-
-        client.set(util.format("%s:%s", moment().format("YYYY-MM-DD"), uid), JSON.stringify({
-            uid: uid,
-            host: host,
-            date_created: new Date(),
-            sockets: [],
-            user_agent: req.get('user-agent')
-        }));
-
-        send_boot(res, user);
-
-    } else {
-
+    if (!uid) {
         uid = req.cookies.lStatistic;
 
-        //第一次访问，而且未登录，写入一个cookie 用来标识这个用户
         if (!uid) {
 
             uid = (+new Date()).toString(36);
@@ -101,17 +83,22 @@ app.get('/boot.js', function (req, res) {
 
             user.cookie = uid;
         }
-
-        client.set(util.format("%s:%s", moment().format("YYYY-MM-DD"), uid), JSON.stringify({
-            uid: uid,
-            host: host,
-            date_created: new Date(),
-            sockets: [],
-            user_agent: req.get('user-agent')
-        }));
-
-        send_boot(res, user);
     }
+
+    //store the visitor info
+    client.setnx(uid, JSON.stringify({
+        uid: uid,
+        host: host,
+        date_created: moment().format("YYYY-MM-DD HH:mm:ss"),
+        user_agent: req.get('user-agent')
+    }));
+
+    //add user to today online
+    client.hmset(util.format("%s:online", moment().format("YYYYMMDD")), uid, moment().format("YYYY-MM-DD HH:mm:ss"));
+    client.quit();
+
+    //send js file        
+    send_boot(res, user);
 });
 
 //send today info about pv
@@ -119,16 +106,17 @@ app.get('/', function (req, res) {
 
     var client = redis.createClient(_config.redis_url);
 
-    //获取今天的统计信息
+    //get today info about pv
     client.get(moment().format("YYYY-MM-DD"), function (err, reply) {
         if (err) throw err;
 
-        var result = JSON.parse(reply);
+        reply = JSON.parse(reply);
+        reply == null && (reply = { online: 0, total: 0, today: 0 });
 
         res.jsonp({
-            online: result.online,
-            total: result.total,
-            today: result.today
+            online: reply.online,
+            total: reply.total,
+            today: reply.today
         });
 
     });
