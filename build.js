@@ -19,9 +19,6 @@ fs.copyRecursive(path.join(__dirname, 'node_modules', 'express'), path.join(path
 fs.copyRecursive(path.join(__dirname, 'node_modules', 'mongodb'), path.join(path_build, 'node_modules', 'mongodb'), function (err) {
 	if (err) throw err;
 });
-fs.copyRecursive(path.join(__dirname, 'node_modules', 'node-windows'), path.join(path_build, 'node_modules', 'node-windows'), function (err) {
-	if (err) throw err;
-});
 fs.copyRecursive(path.join(__dirname, 'node_modules', 'moment'), path.join(path_build, 'node_modules', 'moment'), function (err) {
 	if (err) throw err;
 });
@@ -57,21 +54,3 @@ fs.copy(path.join(__dirname, 'index.js'), path.join(path_build, 'index.js'), fun
 
 	console.log('复制 index.js 文件成功');
 });
-
-console.log('开始复制 install.js 文件');
-fs.copy(path.join(__dirname, 'install.js'), path.join(path_build, 'install.js'), function (err) {
-	if (err) throw err;
-
-	console.log('复制 install.js 文件成功');
-});
-
-console.log('开始复制 uninstall.js 文件');
-fs.copy(path.join(__dirname, 'uninstall.js'), path.join(path_build, 'uninstall.js'), function (err) {
-	if (err) throw err;
-
-	console.log('复制 uninstall.js 文件成功');
-});
-
-//写入 安装/解除  服务的脚本
-fs.writeFileSync(path.join(path_build, 'install.bat'), 'node install', { encoding: 'utf8' });
-fs.writeFileSync(path.join(path_build, 'uninstall.bat'), 'node uninstall', { encoding: 'utf8' });

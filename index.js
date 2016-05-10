@@ -1,4 +1,3 @@
-/* global httpServer */
 var _config = require('./_config.js'),
 	http = require('http'),
 	app = require('./src/server.js'),
