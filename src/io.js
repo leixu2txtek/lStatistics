@@ -1,8 +1,7 @@
 var _config = require('../_config.js'),
     moment = require('moment'),
     io = require('socket.io')(),
-    url = require('url'),
-    redis = require('redis');
+    url = require('url');
 
 const util = require('util');
 
@@ -25,56 +24,56 @@ io.of('/pv').on('connection', function (socket) {
 
     //got a message of pv
     socket.on('message', function (message) {
-        var _url = {};
+        // var _url = {};
 
-        try {
+        // try {
 
-            _url = url.parse(message.url);
+        //     _url = url.parse(message.url);
 
-        } catch (err) { return; }
+        // } catch (err) { return; }
 
-        var host = _url.host,
-            uid = message.userId,
-            ip = socket.handshake.address.replace('::ffff:', ''),
-            date_in = moment().format("YYYY-MM-DD HH:mm:ss"),
-            uid = uid || message.cookie,
-            time = moment();
+        // var host = _url.host,
+        //     uid = message.userId,
+        //     ip = socket.handshake.address.replace('::ffff:', ''),
+        //     date_in = moment().format("YYYY-MM-DD HH:mm:ss"),
+        //     uid = uid || message.cookie,
+        //     time = moment();
 
-        var client = redis.createClient(_config.redis_url);
+        // var client = redis.createClient(_config.redis_url);
 
-        client.sadd(util.format("%s:%s:pv", moment().format("YYYY-MM-DD"), uid), JSON.stringify({
-            uid: uid,
-            userType: message.userType,
-            schoolCode: message.schoolCode,
-            campuszoneId: message.campuszoneId,
-            classId: message.classId,
-            host: host,
-            url: _url.pathname || '',
-            search: _url.search || '',
-            hash: _url.hash || '',
-            ip: ip,
-            referrer: message.referrer,
-            title: message.title,
-            year: time.year(),
-            month: time.month(),
-            day: time.date(),
-            time: time.format('HH:mm:ss'),
-            date_in: date_in,
-            socketId: socket.id
-        }));
+        // client.sadd(util.format("%s:%s:pv", moment().format("YYYY-MM-DD"), uid), JSON.stringify({
+        //     uid: uid,
+        //     userType: message.userType,
+        //     schoolCode: message.schoolCode,
+        //     campuszoneId: message.campuszoneId,
+        //     classId: message.classId,
+        //     host: host,
+        //     url: _url.pathname || '',
+        //     search: _url.search || '',
+        //     hash: _url.hash || '',
+        //     ip: ip,
+        //     referrer: message.referrer,
+        //     title: message.title,
+        //     year: time.year(),
+        //     month: time.month(),
+        //     day: time.date(),
+        //     time: time.format('HH:mm:ss'),
+        //     date_in: date_in,
+        //     socketId: socket.id
+        // }));
 
-        client.get(moment().format("YYYY-MM-DD"), function (err, reply) {
-            if (err) throw err;
+        // client.get(moment().format("YYYY-MM-DD"), function (err, reply) {
+        //     if (err) throw err;
 
-            reply = JSON.parse(reply);
-            reply == null && (reply = { online: 0, total: 0, today: 0 });
+        //     reply = JSON.parse(reply);
+        //     reply == null && (reply = { online: 0, total: 0, today: 0 });
 
-            reply.today = reply.today + 1;
-            reply.total = reply.total + 1;
+        //     reply.today = reply.today + 1;
+        //     reply.total = reply.total + 1;
 
-            //update today & total pv
-            client.set(moment().format("YYYY-MM-DD"), JSON.stringify(reply));
-        });
+        //     //update today & total pv
+        //     client.set(moment().format("YYYY-MM-DD"), JSON.stringify(reply));
+        // });
     });
 
     //disconnect

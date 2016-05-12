@@ -4,7 +4,7 @@ var express = require('express'),
     cookie = require('cookie-parser'),
     moment = require('moment'),
     app = express(),
-    redis = require('redis');
+    mysql = require('mysql');
 
 const util = require('util');
 
@@ -65,7 +65,7 @@ app.get('/boot.js', function (req, res) {
 
     var user = {},
         uid = '',
-        client = redis.createClient(_config.redis_url);
+        connection = mysql.createConnection(_config.mysql_url);
 
     user.userName = uid = req.query.userName || '';
     user.userType = req.query.userType || '';
@@ -85,17 +85,24 @@ app.get('/boot.js', function (req, res) {
         }
     }
 
-    //store the visitor info
-    client.setnx(uid, JSON.stringify({
+    connection.connect();
+
+    //store the visitor info    
+    connection.query('insert into pv_visitor set ?', {
         uid: uid,
         host: host,
         date_created: moment().format("YYYY-MM-DD HH:mm:ss"),
         user_agent: req.get('user-agent')
-    }));
+    }, function (err, rows) {
+
+        if (err) throw err;
+
+        connection.destroy();
+    });
 
     //add user to today online
-    client.hmset(util.format("%s:online", moment().format("YYYYMMDD")), uid, moment().format("YYYY-MM-DD HH:mm:ss"));
-    client.quit();
+    // client.hmset(util.format("%s:online", moment().format("YYYYMMDD")), uid, moment().format("YYYY-MM-DD HH:mm:ss"));
+    // client.quit();
 
     //send js file        
     send_boot(res, user);
@@ -104,24 +111,31 @@ app.get('/boot.js', function (req, res) {
 //send today info about pv
 app.get('/', function (req, res) {
 
-    var client = redis.createClient(_config.redis_url);
+    var connection = mysql.createConnection(_config.mysql_url);
 
-    //get today info about pv
-    client.get(moment().format("YYYY-MM-DD"), function (err, reply) {
+    connection.connect();
+
+    //get today info about pv    
+    connection.query(util.format("select * from pv_day where date = '%s' ", '2016-05-12'), function (err, rows) {
+
         if (err) throw err;
 
-        reply = JSON.parse(reply);
-        reply == null && (reply = { online: 0, total: 0, today: 0 });
+        var result = { online: 0, total: 0, today: 0 };
+
+        if (rows && rows.length > 0) {
+            result.online = rows[0].online;
+            result.total = rows[0].total;
+            result.today = rows[0].today;
+        }
 
         res.jsonp({
-            online: reply.online,
-            total: reply.total,
-            today: reply.today
+            online: result.online,
+            total: result.total,
+            today: result.today
         });
 
+        connection.destroy();
     });
-
-    client.quit();
 });
 
 //get all online user info
