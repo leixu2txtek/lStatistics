@@ -80,29 +80,35 @@ app.get('/boot.js', function (req, res) {
 
             uid = (+new Date()).toString(36);
             res.cookie('lStatistic', uid, { maxAge: 31536000000, httpOnly: true });
-
-            user.cookie = uid;
         }
+
+        user.cookie = uid;
     }
 
     connection.connect();
 
-    //store the visitor info    
-    connection.query('insert into pv_visitor set ?', {
-        uid: uid,
-        host: host,
-        date_created: moment().format("YYYY-MM-DD HH:mm:ss"),
-        user_agent: req.get('user-agent')
-    }, function (err, rows) {
-
+    //store the visitor info
+    connection.query(mysql.format("select * from pv_visitor where uid = ? ", uid), function (err, data) {
         if (err) throw err;
 
-        connection.destroy();
-    });
+        if (data.length == 0) {
 
-    //add user to today online
-    // client.hmset(util.format("%s:online", moment().format("YYYYMMDD")), uid, moment().format("YYYY-MM-DD HH:mm:ss"));
-    // client.quit();
+            connection.query('insert into pv_visitor set ?', {
+                uid: uid,
+                host: host,
+                date_created: moment().format("YYYY-MM-DD HH:mm:ss"),
+                user_agent: req.get('user-agent'),
+                last_visit_time: moment().format("YYYY-MM-DD HH:mm:ss"),
+                active: 0
+            }, function (err, rows) {
+
+                if (err) throw err;
+
+                connection.destroy();
+            });
+
+        }
+    });
 
     //send js file        
     send_boot(res, user);
@@ -116,22 +122,22 @@ app.get('/', function (req, res) {
     connection.connect();
 
     //get today info about pv    
-    connection.query(util.format("select * from pv_day where date = '%s' ", '2016-05-12'), function (err, rows) {
+    connection.query(mysql.format("select * from pv_day where date = ? ", moment().format('YYYY-MM-DD')), function (err, rows) {
 
         if (err) throw err;
 
-        var result = { online: 0, total: 0, today: 0 };
+        var data = { online: 0, total: 0, today: 0 };
 
         if (rows && rows.length > 0) {
-            result.online = rows[0].online;
-            result.total = rows[0].total;
-            result.today = rows[0].today;
+            data.online = rows[0].online;
+            data.total = rows[0].total;
+            data.today = rows[0].today;
         }
 
         res.jsonp({
-            online: result.online,
-            total: result.total,
-            today: result.today
+            online: data.online,
+            total: data.total,
+            today: data.today
         });
 
         connection.destroy();
