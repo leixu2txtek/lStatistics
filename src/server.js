@@ -165,7 +165,7 @@ var send_boot = function (res, user) {
 setInterval(function () {
 
     client.update('update pv_visitor set active = 0 where last_visit_time < ?', moment().add(-3, 'h').format("YYYY-MM-DD HH:mm:ss"), function (err, result) {
-        console.log(moment().format("YYYY-MM-DD HH:mm:ss") + '：' + result.changedRows + 'users are forced offline\r\n');
+        console.log(moment().format("YYYY-MM-DD HH:mm:ss") + '：' + result.changedRows + ' users are forced offline\r\n');
 
         //update online count
         client.update('update pv_day set online = (select count(1) from pv_visitor where active = 1) where date = ?', moment().format('YYYY-MM-DD'));
