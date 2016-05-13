@@ -1,8 +1,8 @@
-var _config = require('../_config.js'),
+var config = require('../_config.js'),
     moment = require('moment'),
     io = require('socket.io')(),
     url = require('url'),
-    mysql = require('mysql');
+    client = require('./sql_connection.js').init();
 
 const util = require('util');
 
@@ -38,10 +38,12 @@ io.of('/pv').on('connection', function (socket) {
             ip = socket.handshake.address.replace('::ffff:', ''),
             date_in = moment().format("YYYY-MM-DD HH:mm:ss"),
             uid = uid || message.cookie,
-            time = moment(),
-            connection = mysql.createConnection(_config.mysql_url);
+            time = moment();
 
-        connection.query('insert into pv_view set ?', {
+        socket.date_in = new Date();
+        socket.uid = uid;
+
+        client.insert('pv_view', {
             uid: uid,
             user_type: message.userType,
             school_code: message.schoolCode,
@@ -63,58 +65,49 @@ io.of('/pv').on('connection', function (socket) {
             active: 1
         }, function (err, rows) {
 
-            if (err) throw err;
-
-            connection.query(mysql.format("select * from pv_visitor where uid = ? ", uid), function (err, data) {
-                if (err) throw err;
+            client.query('select * from pv_visitor where uid = ? ', uid, function (err, data) {
 
                 data = data[0];
 
                 //update visitor last_visit_time & active
-                connection.query(mysql.format('update pv_visitor set last_visit_time = ?, active = 1 where uid = ?', [date_in, uid]), function (err, result) {
-                    if (err) throw err;
+                client.update('update pv_visitor set last_visit_time = ?, active = 1 where uid = ?', [date_in, uid], function (err, result) {
 
                     var date = moment().format('YYYY-MM-DD');
-                    connection.query(mysql.format('select * from pv_day where date = ?', date), function (err, day) {
-                        if (err) throw err;
+                    client.query('select * from pv_day where date = ?', date, function (err, day) {
 
                         //if today info is null then add today info
                         var online = ((data == null || data.active == 1) ? 0 : 1);
                         if (day.length == 0) {
 
-                            connection.query('insert into pv_day set ?', { online: 0, today: 0, total: 0, date: date }, function (err, rows) {
+                            client.insert('pv_day', { online: 0, today: 0, total: 0, date: date }, function (err, rows) {
 
-                                connection.query(mysql.format('update pv_day set online = online + ?, today = today + 1, total = total + 1 where date = ?', [online, date]), function (err, data) {
-                                    if (err) throw err;
-
-                                    connection.destroy();
-                                });
-
+                                client.update('update pv_day set online = online + ?, today = today + 1, total = total + 1 where date = ?', [online, date]);
                             });
 
                         } else {
 
                             //update today info
-                            connection.query(mysql.format('update pv_day set online = online + ?, today = today + 1, total = total + 1 where date = ?', [online, date]), function (err, data) {
-                                if (err) throw err;
-
-                                connection.destroy();
-                            });
-
+                            client.update('update pv_day set online = online + ?, today = today + 1, total = total + 1 where date = ?', [online, date]);
                         }
                     });
-
-
                 });
             });
         });
     });
 
     //disconnect
-    socket.on('disconnect', function (a) {
+    socket.on('disconnect', function () {
+
+        var dt = moment(),
+            params = [dt._d, dt.diff(socket.date_in) / 1000, socket.id];
+
+        //update pageview duration
+        client.update('update pv_view set date_out = ?, duration = ?, active = 0 where socket_id = ?', params);
+
+        //update visitor's active status
+        client.update('update pv_visitor set active = (select case when count(1) > 0 then 1 else 0 end from pv_view where uid = ? and active = 1) where uid = ?', [socket.uid, socket.uid]);
+
+        //update online count
+        client.update('update pv_day set online = (select count(1) from pv_visitor where active = 1) where date = ?', moment().format('YYYY-MM-DD'));
     });
 });
-
-//update today pv info while user disconnect
-var update_on_disconnect = function (db, socketId, s_uid, s_host) {
-};

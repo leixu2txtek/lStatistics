@@ -1,10 +1,10 @@
 var express = require('express'),
-    _config = require('../_config.js'),
+    config = require('../_config.js'),
     url = require('url'),
     cookie = require('cookie-parser'),
     moment = require('moment'),
     app = express(),
-    mysql = require('mysql');
+    client = require('./sql_connection.js').init();
 
 const util = require('util');
 
@@ -56,16 +56,15 @@ app.get('/boot.js', function (req, res) {
         return;
     }
 
-    //校验 referrer 中域名或ip 是否在我们需要记录的表中
-    if (_config.hosts.indexOf(host) == -1) {
+    //validate referrer if we need to record
+    if (config.hosts.indexOf(host) == -1) {
 
         res.send(util.format("typeof callback != 'undefined' && callback(%s)", JSON.stringify({ code: 500, msg: 'Referrer Not Correct' })));
         return;
     }
 
     var user = {},
-        uid = '',
-        connection = mysql.createConnection(_config.mysql_url);
+        uid = '';
 
     user.userName = uid = req.query.userName || '';
     user.userType = req.query.userType || '';
@@ -85,26 +84,20 @@ app.get('/boot.js', function (req, res) {
         user.cookie = uid;
     }
 
-    connection.connect();
-
     //store the visitor info
-    connection.query(mysql.format("select * from pv_visitor where uid = ? ", uid), function (err, data) {
+    client.query('select * from pv_visitor where uid = ? ', uid, function (err, data) {
         if (err) throw err;
 
         if (data.length == 0) {
 
-            connection.query('insert into pv_visitor set ?', {
+            //add visitor info
+            client.insert('pv_visitor', {
                 uid: uid,
                 host: host,
                 date_created: moment().format("YYYY-MM-DD HH:mm:ss"),
                 user_agent: req.get('user-agent'),
                 last_visit_time: moment().format("YYYY-MM-DD HH:mm:ss"),
                 active: 0
-            }, function (err, rows) {
-
-                if (err) throw err;
-
-                connection.destroy();
             });
 
         }
@@ -117,14 +110,10 @@ app.get('/boot.js', function (req, res) {
 //send today info about pv
 app.get('/', function (req, res) {
 
-    var connection = mysql.createConnection(_config.mysql_url);
-
-    connection.connect();
-
     //get today info about pv    
-    connection.query(mysql.format("select * from pv_day where date = ? ", moment().format('YYYY-MM-DD')), function (err, rows) {
+    client.query('select * from pv_day where date = ? ', moment().format('YYYY-MM-DD'), function (err, rows) {
 
-        if (err) throw err;
+        if (!!err) throw err;
 
         var data = { online: 0, total: 0, today: 0 };
 
@@ -139,42 +128,28 @@ app.get('/', function (req, res) {
             total: data.total,
             today: data.today
         });
-
-        connection.destroy();
     });
 });
 
 //get all online user info
 app.get('/users', function (req, res) {
+    client.query('select uid from pv_visitor where active = 1', {}, function (err, online) {
 
-    mongoClient.connect(_config.mongodb_url, function (err, db) {
-        if (err) throw err;
+        var data = [];
 
-        var collection = db.collection('visitor');
+        online.forEach(function (e) {
+            data.push(e.uid);
+        }, this);
 
-        collection.find({
-            host: { $in: _config.hosts },
-            sockets: {
-                $not: { $size: 0 }
-            }
-        }).toArray(function (err, online) {
-            var data = [];
-
-            online.forEach(function (e) {
-                data.push(e.uid);
-            }, this);
-
-            res.send(JSON.stringify(data));
-        });
+        res.send(JSON.stringify(data));
     });
-
 });
 
 //generate the boot.js
 var send_boot = function (res, user) {
     var js = "var socket=io('{{url}}'),send=function(){socket.emit('message',{url:document.location.href,referrer:document.referrer,title:document.title,userId:'{{userName}}',userType:'{{userType}}',schoolCode:'{{schoolCode}}',campuszoneId:'{{campuszoneId}}',classId:'{{classId}}',cookie:'{{cookie}}',})};socket.on('connect',function(){send();window.onhashchange=send});";
 
-    js = js.replace('{{url}}', _config.socket_url);
+    js = js.replace('{{url}}', config.socket_url);
     js = js.replace('{{userName}}', user.userName);
     js = js.replace('{{userType}}', user.userType);
     js = js.replace('{{schoolCode}}', user.schoolCode);
@@ -186,42 +161,16 @@ var send_boot = function (res, user) {
     res.send(js);
 };
 
-//定时取出创建时间小于当前时间3小时的用户，将其置于离线状态
-// setInterval(function () {
-//     mongoClient.connect(_config.mongodb_url, function (err, db) {
+//gets the last visit time by more than three hours. force offline
+setInterval(function () {
 
-//         if (err) throw err;
+    client.update('update pv_visitor set active = 0 where last_visit_time < ?', moment().add(-3, 'h').format("YYYY-MM-DD HH:mm:ss"), function (err, result) {
+        console.log(moment().format("YYYY-MM-DD HH:mm:ss") + '：' + result.changedRows + 'users are forced offline\r\n');
 
-//         var _date = new Date(),
-//             _utc_date = new Date();
+        //update online count
+        client.update('update pv_day set online = (select count(1) from pv_visitor where active = 1) where date = ?', moment().format('YYYY-MM-DD'));
+    });
 
-//         _utc_date.setUTCFullYear(_date.getUTCFullYear());
-//         _utc_date.setUTCMonth(_date.getUTCMonth());
-//         _utc_date.setUTCDate(_date.getUTCDate());
-//         _utc_date.setUTCHours(_date.getUTCHours());
-//         _utc_date.setUTCMinutes(_date.getUTCMinutes());
-//         _utc_date.setUTCSeconds(_date.getUTCSeconds());
-
-//         _utc_date.setUTCHours(_utc_date.getUTCHours() - 3);   //当前时间减去3小时
-
-//         db.collection('visitor').update(
-//             {
-//                 sockets: {
-//                     $not: { $size: 0 }
-//                 },
-//                 'datecreated': { $lte: _utc_date }
-//             },
-//             {
-//                 $set: {
-//                     sockets: [] //将sockets 置为空数组即代表离线
-//                 },
-//                 $currentDate: { lastModified: true }
-//             }, { multi: true }, function (err, res) {
-
-//                 db.close();
-//                 console.log(moment().format("YYYY-MM-DD HH:mm:ss") + ' 共主动离线了' + res.result.nModified + '个在线用户');
-//             });
-//     });
-// }, 1000 * 60 * 10);
+}, 1000 * 60 * 10);
 
 module.exports = app;
