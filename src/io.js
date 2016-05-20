@@ -79,9 +79,15 @@ io.of('/pv').on('connection', function (socket) {
                         var online = ((data == null || data.active == 1) ? 0 : 1);
                         if (day.length == 0) {
 
-                            client.query('select total from pv_day where date = ?', moment().add(-1, 'd').format('YYYY-MM-DD'), function (err, total) {
+                            client.query('select total from pv_day where date = ?', moment().add(-1, 'd').format('YYYY-MM-DD'), function (err, rows) {
 
-                                client.insert('pv_day', { online: 0, today: 0, total: total[0].total, date: date }, function (err, rows) {
+                                var total = 0;
+
+                                if (rows && rows.length == 1) {
+                                    total = rows[0].total;
+                                }
+
+                                client.insert('pv_day', { online: 0, today: 0, total: total, date: date }, function (err, rows) {
 
                                     client.update('update pv_day set online = online + ?, today = today + 1, total = total + 1 where date = ?', [online, date]);
                                 });
