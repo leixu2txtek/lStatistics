@@ -8,7 +8,7 @@ var sql = {
     init: function () {
 
         if (pool == null) {
-            pool = mysql.createPool(config.mysql_url);
+            pool = mysql.createPool(config.mysql_config);
         }
     },
 
@@ -134,9 +134,9 @@ var client = {
         if (!!pool) return client;
 
         sql.init();
-        
+
         client.format = mysql.format;
-        
+
         client.query = sql.query;
         client.update = sql.update;
         client.remove = sql.remove;
