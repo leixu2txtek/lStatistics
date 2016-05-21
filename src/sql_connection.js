@@ -92,7 +92,7 @@ var sql = {
                 return;
             }
 
-            connection.query(mysql.format('INSERT INTO ?? set ?', table), data, function (err, result) {
+            connection.query(mysql.format('REPLACE INTO ?? set ?', table), data, function (err, result) {
                 connection.release();
 
                 if (err) {
@@ -106,11 +106,24 @@ var sql = {
 
     },
 
+    //get connection
+    connection: function (callback) {
+
+        pool.getConnection(function (err, connection) {
+
+            if (err) {
+                console.error('[sql_get_connection_error] ' + err.stack);
+                return;
+            }
+
+            callback && callback.apply(null, [err, connection]);
+        });
+    },
+
     //close all connections    
     end: function () {
 
         pool.end();
-
     }
 };
 
@@ -121,10 +134,14 @@ var client = {
         if (!!pool) return client;
 
         sql.init();
+        
+        client.format = mysql.format;
+        
         client.query = sql.query;
         client.update = sql.update;
         client.remove = sql.remove;
         client.insert = sql.insert;
+        client.connection = sql.connection;
 
         return client;
     },

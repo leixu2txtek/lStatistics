@@ -84,23 +84,27 @@ app.get('/boot.js', function (req, res) {
         user.cookie = uid;
     }
 
-    //store the visitor info
-    client.query('select * from pv_visitor where uid = ? ', uid, function (err, data) {
-        if (err) throw err;
+    //store the visitor info , if exists then update last_visit_time
+    client.connection(function (err, connection) {
 
-        if (data.length == 0) {
+        var data = {
+            uid: uid,
+            host: host,
+            date_created: moment().format("YYYY-MM-DD HH:mm:ss"),
+            user_agent: req.get('user-agent'),
+            last_visit_time: moment().format("YYYY-MM-DD HH:mm:ss"),
+            active: 1
+        };
 
-            //add visitor info
-            client.insert('pv_visitor', {
-                uid: uid,
-                host: host,
-                date_created: moment().format("YYYY-MM-DD HH:mm:ss"),
-                user_agent: req.get('user-agent'),
-                last_visit_time: moment().format("YYYY-MM-DD HH:mm:ss"),
-                active: 0
-            });
+        connection.query(client.format('INSERT INTO pv_visitor set ? ON DUPLICATE KEY UPDATE last_visit_time = VALUES (last_visit_time) , active = 1'), data, function (err, result) {
+            connection.release();
 
-        }
+            if (!!err) {
+                console.error('[sql_insert_error] ' + err.stack);
+                return;
+            }
+
+        });
     });
 
     //send js file        
@@ -111,9 +115,12 @@ app.get('/boot.js', function (req, res) {
 app.get('/', function (req, res) {
 
     //get today info about pv    
-    client.query('select * from pv_day where date = ? ', moment().format('YYYY-MM-DD'), function (err, rows) {
+    client.query('select (select count(1) from pv_visitor where active = 1) as online , (select count(1) from pv_view where date_in > ?) as today , (select count(1) from pv_view) as total', moment().format('YYYY-MM-DD 00:00:00'), function (err, rows) {
 
-        if (!!err) throw err;
+        if (!rows || rows.length == 0) {
+
+            client.insert('pv_day', { online: 0, today: 0, total: total, date: date });
+        }
 
         var data = { online: 0, total: 0, today: 0 };
 
@@ -166,9 +173,6 @@ setInterval(function () {
 
     client.update('update pv_visitor set active = 0 where last_visit_time < ?', moment().add(-3, 'h').format("YYYY-MM-DD HH:mm:ss"), function (err, result) {
         console.log(moment().format("YYYY-MM-DD HH:mm:ss") + '：' + result.changedRows + ' users are forced offline\r\n');
-
-        //update online count
-        client.update('update pv_day set online = (select count(1) from pv_visitor where active = 1) where date = ?', moment().format('YYYY-MM-DD'));
     });
 
 }, 1000 * 60 * 10);
