@@ -115,26 +115,42 @@ app.get('/boot.js', function (req, res) {
 app.get('/', function (req, res) {
 
     //get today info about pv    
-    client.query('select (select count(1) from pv_visitor where active = 1) as online , (select count(1) from pv_view where date_in > ?) as today , (select count(1) from pv_view) as total', moment().format('YYYY-MM-DD 00:00:00'), function (err, rows) {
-
-        if (!rows || rows.length == 0) {
-
-            client.insert('pv_day', { online: 0, today: 0, total: total, date: date });
-        }
+    client.query('select (select count(1) from pv_visitor where active = 1) as online , today , total from pv_day where date = ?', moment().format('YYYY-MM-DD 00:00:00'), function (err, rows) {
 
         var data = { online: 0, total: 0, today: 0 };
 
-        if (rows && rows.length > 0) {
-            data.online = rows[0].online;
-            data.total = rows[0].total;
-            data.today = rows[0].today;
-        }
+        if (!rows || rows.length == 0) {
 
-        res.jsonp({
-            online: data.online,
-            total: data.total,
-            today: data.today
-        });
+            client.query('select total from pv_day where date = ?', moment().add(-1, 'd').format('YYYY-MM-DD'), function (err, rows) {
+
+                if (rows && rows.length == 1) {
+                    data.total = rows[0].total;
+                }
+
+                client.insert('pv_day', { today: 0, total: data.total, date: moment().format('YYYY-MM-DD') });
+
+                res.jsonp({
+                    online: data.online,
+                    today: data.today,
+                    total: data.total
+                });
+
+            });
+
+        } else {
+
+            if (rows && rows.length > 0) {
+                data.online = rows[0].online;
+                data.total = rows[0].total;
+                data.today = rows[0].today;
+            }
+
+            res.jsonp({
+                online: data.online,
+                today: data.today,
+                total: data.total
+            });
+        }
     });
 });
 

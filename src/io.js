@@ -63,6 +63,10 @@ io.of('/pv').on('connection', function (socket) {
             date_in: date_in,
             socket_id: socket.id,
             active: 1
+        }, function () {
+
+            //update today info
+            client.update('update pv_day set today = today + 1, total = total + 1 where date = ?', moment().format('YYYY-MM-DD'));
         });
     });
 
