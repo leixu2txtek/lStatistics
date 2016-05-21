@@ -2,7 +2,7 @@ module.exports = {
     http_server_port: 2345,
     mysql_config: {
         connectionLimit: 400,
-        host: '127.0.0.1',
+        host: '192.168.0.231',
         user: 'root',
         password: '',
         database: 'statistic'
