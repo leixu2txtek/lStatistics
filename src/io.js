@@ -40,6 +40,8 @@ io.of('/pv').on('connection', function (socket) {
             uid = uid || message.cookie,
             time = moment();
 
+        if (!uid) return;
+
         socket.date_in = new Date();
         socket.uid = uid;
 
