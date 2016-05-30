@@ -44,7 +44,7 @@ io.of('/pv').on('connection', function (socket) {
         io.of('/stat').emit('pv', {
             connections: io.of('/pv').sockets.length,
             ip: ip,
-            id: socketId,
+            id: socket.id,
             url: message.url,
             xdomain: socket.handshake.xdomain,
             timestamp: new Date()
@@ -109,7 +109,7 @@ io.of('/pv').on('connection', function (socket) {
 var update_on_connected = function (socket) {
 
     //update user page_view socketid
-    client.update('pv_visitor', { uid: socket.uid }, { $addToSet: { sockets: socketId } }, function (result) {
+    client.update('pv_visitor', { uid: socket.uid }, { $addToSet: { sockets: socket.id } }, function (result) {
 
         client.count('pv_visitor', { sockets: { $not: { $size: 0 } } }, function (online) {
 
@@ -122,7 +122,7 @@ var update_on_connected = function (socket) {
 var update_on_disconnected = function (socket) {
 
     //remove user page_view socketid
-    client.update('pv_visitor', { uid: socket.uid }, { $pull: { sockets: socketId } }, function (result) {
+    client.update('pv_visitor', { uid: socket.uid }, { $pull: { sockets: socket.id } }, function (result) {
 
         client.count('pv_visitor', { sockets: { $not: { $size: 0 } } }, function (online) {
 
