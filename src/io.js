@@ -1,8 +1,8 @@
-var config = require('../_config.js'),
+var config = require('../config.js'),
     moment = require('moment'),
     io = require('socket.io')(),
     url = require('url'),
-    client = require('./sql_connection.js').init();
+    client = require('./connection.js');
 
 const util = require('util');
 
@@ -11,9 +11,9 @@ io.listen(httpServer);
 
 //配置
 io.use(function (socket, next) {
-    var handshakeData = socket.request;
+    var request = socket.request;
 
-    if (handshakeData.headers.cookie) {
+    if (request.headers.cookie) {
         next();
     } else {
         next(new Error('No cookie transmitted.'));
@@ -36,11 +36,19 @@ io.of('/pv').on('connection', function (socket) {
         var host = _url.host,
             uid = message.userId,
             ip = socket.handshake.address.replace('::ffff:', ''),
-            date_in = moment().format("YYYY-MM-DD HH:mm:ss"),
             uid = uid || message.cookie,
             time = moment();
 
         if (!uid) return;
+
+        io.of('/stat').emit('pv', {
+            connections: io.of('/pv').sockets.length,
+            ip: ip,
+            id: socketId,
+            url: message.url,
+            xdomain: socket.handshake.xdomain,
+            timestamp: new Date()
+        });
 
         socket.date_in = new Date();
         socket.uid = uid;
@@ -62,28 +70,63 @@ io.of('/pv').on('connection', function (socket) {
             month: time.month() + 1,
             day: time.date(),
             time: time.format('HH:mm:ss'),
-            date_in: date_in,
+            date_in: socket.date_in,
             socket_id: socket.id,
             active: 1
         }, function () {
 
-            //update today info
-            client.update('update pv_day set today = today + 1, total = total + 1 where date = ?', moment().format('YYYY-MM-DD'));
+            //update while socket is connected
+            update_on_connected(socket);
         });
     });
 
     //disconnect
     socket.on('disconnect', function () {
 
-        var dt = moment(),
-            params = [dt._d, dt.diff(socket.date_in) / 1000, socket.id];
+        io.of('/stat').emit('pageview', {
+            connections: Math.max(io.of('/pv').sockets.length - 1, 0),
+            id: socket.id
+        });
 
-        //update pageview duration
-        client.update('update pv_view set date_out = ?, duration = ?, active = 0 where socket_id = ?', params, function () {
+        var dt = moment();
 
-            //update visitor's active status
-            client.update('update pv_visitor set active = (select case when count(1) > 0 then 1 else 0 end from pv_view where uid = ? and active = 1) where uid = ?', [socket.uid, socket.uid]);
+        //update duration
+        client.update('pv_view', { socket_id: socket.id }, {
+            $set: {
+                date_out: dt._d,
+                active: 0,
+                duration: dt.diff(socket.date_in) / 1000
+            }
+        }, function (result) {
 
+            //update while socket is disconnected
+            update_on_disconnected(socket);
         });
     });
 });
+
+//update while socket is connected
+var update_on_connected = function (socket) {
+
+    //update user page_view socketid
+    client.update('pv_visitor', { uid: socket.uid }, { $addToSet: { sockets: socketId } }, function (result) {
+
+        client.count('pv_visitor', { sockets: { $not: { $size: 0 } } }, function (online) {
+
+            client.update('pv_day', { date: moment().format('YYYY-MM-DD') }, { online: online, $inc: { day: 1, total: 1 } });
+        });
+    });
+};
+
+//update while socket is disconnected
+var update_on_disconnected = function (socket) {
+
+    //remove user page_view socketid
+    client.update('pv_visitor', { uid: socket.uid }, { $pull: { sockets: socketId } }, function (result) {
+
+        client.count('pv_visitor', { sockets: { $not: { $size: 0 } } }, function (online) {
+
+            client.update('pv_day', { date: moment().format('YYYY-MM-DD') }, { online: online });
+        });
+    });
+};

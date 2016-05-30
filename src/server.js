@@ -1,10 +1,11 @@
 var express = require('express'),
-    config = require('../_config.js'),
+    config = require('../config.js'),
     url = require('url'),
     cookie = require('cookie-parser'),
     moment = require('moment'),
     app = express(),
-    client = require('./sql_connection.js').init();
+    mongo = require('mongodb').MongoClient,
+    client = require('./connection.js');
 
 const util = require('util');
 
@@ -84,27 +85,19 @@ app.get('/boot.js', function (req, res) {
         user.cookie = uid;
     }
 
+    if (!uid) {
+
+        res.send(util.format("typeof callback != 'undefined' && callback(%s)", JSON.stringify({ code: 500, msg: 'Server error' })));
+        return;
+    }
+
     //store the visitor info , if exists then update last_visit_time
-    client.connection(function (err, connection) {
-
-        var data = {
-            uid: uid,
-            host: host,
-            date_created: moment().format("YYYY-MM-DD HH:mm:ss"),
-            user_agent: req.get('user-agent'),
-            last_visit_time: moment().format("YYYY-MM-DD HH:mm:ss"),
-            active: 1
-        };
-
-        connection.query(client.format('INSERT INTO pv_visitor set ? ON DUPLICATE KEY UPDATE last_visit_time = VALUES (last_visit_time) , active = 1'), data, function (err, result) {
-            connection.release();
-
-            if (!!err) {
-                console.error('[sql_insert_error] ' + err.stack);
-                return;
-            }
-
-        });
+    client.update('pv_visitor', { uid: uid }, {
+        uid: uid,
+        host: host,
+        user_agent: req.get('user-agent'),
+        sockets: [],
+        last_visit_time: new Date()
     });
 
     //send js file        
@@ -115,19 +108,19 @@ app.get('/boot.js', function (req, res) {
 app.get('/', function (req, res) {
 
     //get today info about pv    
-    client.query('select (select count(1) from pv_visitor where active = 1) as online , today , total from pv_day where date = ?', moment().format('YYYY-MM-DD 00:00:00'), function (err, rows) {
+    client.find('pv_day', { date: moment().format('YYYY-MM-DD') }, function (rows) {
 
         var data = { online: 0, total: 0, today: 0 };
 
-        if (!rows || rows.length == 0) {
+        if (rows.length == 0) {
 
-            client.query('select total from pv_day where date = ?', moment().add(-1, 'd').format('YYYY-MM-DD'), function (err, rows) {
+            client.find('pv_day', { date: moment().add(-1, 'd').format('YYYY-MM-DD') }, function (rows) {
 
                 if (rows && rows.length == 1) {
                     data.total = rows[0].total;
                 }
 
-                client.insert('pv_day', { today: 0, total: data.total, date: moment().format('YYYY-MM-DD') });
+                client.insert('pv_day', { online: 0, today: 0, total: data.total, date: moment().format('YYYY-MM-DD') });
 
                 res.jsonp({
                     online: data.online,
@@ -139,11 +132,9 @@ app.get('/', function (req, res) {
 
         } else {
 
-            if (rows && rows.length > 0) {
-                data.online = rows[0].online;
-                data.total = rows[0].total;
-                data.today = rows[0].today;
-            }
+            data.online = rows[0].online;
+            data.total = rows[0].total;
+            data.today = rows[0].today;
 
             res.jsonp({
                 online: data.online,
@@ -156,7 +147,8 @@ app.get('/', function (req, res) {
 
 //get all online user info
 app.get('/users', function (req, res) {
-    client.query('select uid from pv_visitor where active = 1', {}, function (err, online) {
+
+    client.query('pv_visitor', { sockets: { $not: { $size: 0 } } }, function (online) {
 
         var data = [];
 
@@ -187,8 +179,8 @@ var send_boot = function (res, user) {
 //gets the last visit time by more than three hours. force offline
 setInterval(function () {
 
-    client.update('update pv_visitor set active = 0 where last_visit_time < ?', moment().add(-3, 'h').format("YYYY-MM-DD HH:mm:ss"), function (err, result) {
-        console.log(moment().format("YYYY-MM-DD HH:mm:ss") + '：' + result.changedRows + ' users are forced offline\r\n');
+    client.update({ last_visit_time: { $lte: moment().add(-3, 'h')._d } }, { $set: { sockets: [] } }, { multi: true }, function (err, res) {
+        console.log(moment().format("YYYY-MM-DD HH:mm:ss") + '：' + res.result.nModified + ' users are forced offline\r\n');
     });
 
 }, 1000 * 60 * 10);
