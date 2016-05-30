@@ -10,7 +10,7 @@
 
 1. npm install      //安装所需包
 2. 更改 config.js 中的配置信息，主要是 mongodb 的链接支付串
-3. 执行 node init_tables 生成 mysql 数据表
+3. 执行 node init_tables 生成 mongodb 数据表
 4. 执行 node index 启动服务
 
 
@@ -18,7 +18,6 @@
 打开浏览器，输入 http://localhost:2345/ 浏览器中会返回当日的访问信息
 
 {"online":5,"total":244,"today":244}
-
 
 
 PS：本工程是在项目中使用的，有什么问题可以在 issues 提出，谢谢；
