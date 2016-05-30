@@ -5,7 +5,8 @@ var express = require('express'),
     moment = require('moment'),
     app = express(),
     mongo = require('mongodb').MongoClient,
-    client = require('./connection.js');
+    client = require('./connection.js'),
+    path = require('path');
 
 const util = require('util');
 
@@ -27,6 +28,8 @@ app.use(function (req, res, next) {
     // Pass to next layer of middleware
     next();
 });
+
+app.use('/static', express.static(path.join(path.dirname(__dirname), 'public')));
 
 //send boot.js
 app.get('/boot.js', function (req, res) {

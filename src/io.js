@@ -113,7 +113,7 @@ var update_on_connected = function (socket) {
 
         client.count('pv_visitor', { sockets: { $not: { $size: 0 } } }, function (online) {
 
-            client.update('pv_day', { date: moment().format('YYYY-MM-DD') }, { online: online, $inc: { day: 1, total: 1 } });
+            client.update('pv_day', { date: moment().format('YYYY-MM-DD') }, { $set: { online: online }, $inc: { today: 1, total: 1 } });
         });
     });
 };
@@ -126,7 +126,7 @@ var update_on_disconnected = function (socket) {
 
         client.count('pv_visitor', { sockets: { $not: { $size: 0 } } }, function (online) {
 
-            client.update('pv_day', { date: moment().format('YYYY-MM-DD') }, { online: online });
+            client.update('pv_day', { date: moment().format('YYYY-MM-DD') }, { $set: { online: online } });
         });
     });
 };
