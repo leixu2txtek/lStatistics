@@ -182,7 +182,7 @@ var send_boot = function (res, user) {
 //gets the last visit time by more than three hours. force offline
 setInterval(function () {
 
-    client.update({ last_visit_time: { $lte: moment().add(-3, 'h')._d } }, { $set: { sockets: [] } }, { multi: true }, function (err, res) {
+    client.update('pv_visitor',{ last_visit_time: { $lte: moment().add(-3, 'h')._d } }, { $set: { sockets: [] } }, { multi: true }, function (err, res) {
         console.log(moment().format("YYYY-MM-DD HH:mm:ss") + '：' + res.result.nModified + ' users are forced offline\r\n');
     });
 
