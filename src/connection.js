@@ -14,7 +14,7 @@ var client = {
         mongo.connect(config.mongo_config, {
             server: {
                 auto_reconnect: true,
-                poolSize: 100,
+                poolSize: 500,
                 socketOptions: {
                     connectTimeoutMS: 3600000,
                     keepAlive: 3600000,
@@ -50,14 +50,14 @@ var client = {
         var _this = this;
         _this.connect(function (db) {
 
-            db.collection(collection).find(query).limit(1).toArray(function (err, data) {
+            db.collection(collection).find(query).limit(1).toArray(function (err, result) {
 
                 if (!!err) {
                     console.error('Mongo find error: %s', err.stack);
                     return;
                 }
 
-                callback && callback.apply(null, [data]);
+                callback && callback.apply(null, [result]);
             });
         });
     },
@@ -66,14 +66,14 @@ var client = {
         var _this = this;
         _this.connect(function (db) {
 
-            db.collection(collection).find(query).toArray(function (err, data) {
+            db.collection(collection).find(query).toArray(function (err, result) {
 
                 if (!!err) {
                     console.error('Mongo find error: %s', err.stack);
                     return;
                 }
 
-                callback && callback.apply(null, [data]);
+                callback && callback.apply(null, [result]);
             });
         });
     },
@@ -82,14 +82,14 @@ var client = {
         var _this = this;
         _this.connect(function (db) {
 
-            db.collection(collection).insertOne(data, function (err, data) {
+            db.collection(collection).insertOne(data, function (err, result) {
 
                 if (!!err) {
                     console.error('Mongo insert error: %s', err.stack);
                     return;
                 }
 
-                callback && callback.apply(null, [data]);
+                callback && callback.apply(null, [result]);
             });
         });
     },
@@ -98,14 +98,30 @@ var client = {
         var _this = this;
         _this.connect(function (db) {
 
-            db.collection(collection).updateOne(query, data, { upsert: true, w: 1 }, function (err, data) {
+            db.collection(collection).updateOne(query, data, { upsert: true, w: 1 }, function (err, result) {
 
                 if (!!err) {
                     console.error('Mongo update error: %s', err.stack);
                     return;
                 }
 
-                callback && callback.apply(null, [data]);
+                callback && callback.apply(null, [result]);
+            });
+        });
+    },
+    update_many: function (collection, query, data, callback) {
+
+        var _this = this;
+        _this.connect(function (db) {
+
+            db.collection(collection).updateMany(query, data, { w: 1 }, function (err, result) {
+
+                if (!!err) {
+                    console.error('Mongo update error: %s', err.stack);
+                    return;
+                }
+
+                callback && callback.apply(null, [result]);
             });
         });
     },
