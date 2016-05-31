@@ -117,20 +117,27 @@ app.get('/', function (req, res) {
 
         if (rows.length == 0) {
 
-            client.find('pv_day', { date: moment().add(-1, 'd').format('YYYY-MM-DD') }, function (rows) {
+            client.connect(function (db) {
+                db.collection('pv_day').find().sort({ date: -1 }).limit(1).toArray(function (err, rows) {
 
-                if (rows && rows.length == 1) {
-                    data.total = rows[0].total;
-                }
+                    if (!!err) {
+                        console.error('Mongo find error: %s', err.stack);
+                        return;
+                    }
 
-                client.insert('pv_day', { online: 0, today: 0, total: data.total, date: moment().format('YYYY-MM-DD') });
+                    if (rows && rows.length == 1) {
+                        data.total = rows[0].total;
+                    }
 
-                res.jsonp({
-                    online: data.online,
-                    today: data.today,
-                    total: data.total
+                    client.insert('pv_day', { online: 0, today: 0, total: data.total, date: moment().format('YYYY-MM-DD') });
+
+                    res.jsonp({
+                        online: data.online,
+                        today: data.today,
+                        total: data.total
+                    });
+
                 });
-
             });
 
         } else {
