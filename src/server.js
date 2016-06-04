@@ -110,8 +110,10 @@ app.get('/boot.js', function (req, res) {
 //send today info about pv
 app.get('/', function (req, res) {
 
-    //get today info about pv    
-    client.find('pv_day', { date: moment().format('YYYY-MM-DD') }, function (rows) {
+    //get today info about pv   
+    var date = moment();
+
+    client.find('pv_day', { date: date.format('YYYY-MM-DD') }, function (rows) {
 
         var data = { online: 0, total: 0, today: 0 };
 
@@ -129,12 +131,27 @@ app.get('/', function (req, res) {
                         data.total = rows[0].total;
                     }
 
-                    client.insert('pv_day', { online: 0, today: 0, total: data.total, date: moment().format('YYYY-MM-DD') });
+                    db.collection('pv_view').find({
+                        date_in: {
+                            $gte: new Date(date._d.getFullYear(), date._d.getMonth(), date._d.getDate())
+                        }
+                    }).count(function (err, count) {
 
-                    res.jsonp({
-                        online: data.online,
-                        today: data.today,
-                        total: data.total
+                        if (!!err) {
+                            console.error('Mongo count error: %s', err.stack);
+                            return;
+                        }
+
+                        data.today = count;
+                        data.total = data.total + data.today;
+
+                        client.insert('pv_day', { online: 0, today: data.today, total: data.total, date: date.format('YYYY-MM-DD') });
+
+                        res.jsonp({
+                            online: data.online,
+                            today: data.today,
+                            total: data.total
+                        });
                     });
 
                 });

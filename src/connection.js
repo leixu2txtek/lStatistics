@@ -98,7 +98,7 @@ var client = {
         var _this = this;
         _this.connect(function (db) {
 
-            db.collection(collection).updateOne(query, data, { upsert: true, w: 1 }, function (err, result) {
+            db.collection(collection).updateOne(query, data, { upsert: false, w: 1 }, function (err, result) {
 
                 if (!!err) {
                     console.error('Mongo update error: %s', err.stack);
