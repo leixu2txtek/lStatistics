@@ -10,7 +10,7 @@
 
 1. npm install      //安装所需包
 2. 更改 config.js 中的配置信息，主要是 mongodb 的链接支付串
-3. 执行 node init_tables 生成 mongodb 数据表
+3. 执行 node init_collection 生成 mongodb 数据表
 4. 执行 node index 启动服务
 
 

@@ -35,7 +35,7 @@ io.of('/pv').on('connection', function (socket) {
 
         var host = _url.host,
             uid = message.userId,
-            ip = socket.handshake.address.replace('::ffff:', ''),
+            ip = socket.handshake.headers['X-Real-IP'] || socket.handshake.address.replace('::ffff:', ''),
             uid = uid || message.cookie,
             time = moment();
 
@@ -46,8 +46,7 @@ io.of('/pv').on('connection', function (socket) {
             ip: ip,
             id: socket.id,
             url: message.url,
-            xdomain: socket.handshake.xdomain,
-            timestamp: new Date()
+            time: time.format('YYYY-MM-DD HH:mm:ss')
         });
 
         socket.date_in = new Date();
@@ -83,7 +82,7 @@ io.of('/pv').on('connection', function (socket) {
     //disconnect
     socket.on('disconnect', function () {
 
-        io.of('/stat').emit('pageview', {
+        io.of('/stat').emit('pv', {
             connections: Math.max(io.of('/pv').sockets.length - 1, 0),
             id: socket.id
         });
