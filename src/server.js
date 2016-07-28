@@ -101,7 +101,7 @@ app.get('/boot.js', function (req, res) {
         user_agent: req.get('user-agent'),
         sockets: [],
         last_visit_time: new Date()
-    });
+    }, true);
 
     //send js file        
     send_boot(res, user);

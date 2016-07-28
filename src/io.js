@@ -96,7 +96,7 @@ io.of('/pv').on('connection', function (socket) {
                 active: 0,
                 duration: dt.diff(socket.date_in) / 1000
             }
-        }, function (result) {
+        }, false, function (result) {
 
             //update while socket is disconnected
             update_on_disconnected(socket);
@@ -108,11 +108,11 @@ io.of('/pv').on('connection', function (socket) {
 var update_on_connected = function (socket) {
 
     //update user page_view socketid
-    client.update('pv_visitor', { uid: socket.uid }, { $addToSet: { sockets: socket.id } }, function (result) {
+    client.update('pv_visitor', { uid: socket.uid }, { $addToSet: { sockets: socket.id } }, false, function (result) {
 
         client.count('pv_visitor', { sockets: { $not: { $size: 0 } } }, function (online) {
 
-            client.update('pv_day', { date: moment().format('YYYY-MM-DD') }, { $set: { online: online }, $inc: { today: 1, total: 1 } });
+            client.update('pv_day', { date: moment().format('YYYY-MM-DD') }, { $set: { online: online }, $inc: { today: 1, total: 1 } }, false);
         });
     });
 };
@@ -121,11 +121,11 @@ var update_on_connected = function (socket) {
 var update_on_disconnected = function (socket) {
 
     //remove user page_view socketid
-    client.update('pv_visitor', { uid: socket.uid }, { $pull: { sockets: socket.id } }, function (result) {
+    client.update('pv_visitor', { uid: socket.uid }, { $pull: { sockets: socket.id } }, false, function (result) {
 
         client.count('pv_visitor', { sockets: { $not: { $size: 0 } } }, function (online) {
 
-            client.update('pv_day', { date: moment().format('YYYY-MM-DD') }, { $set: { online: online } });
+            client.update('pv_day', { date: moment().format('YYYY-MM-DD') }, { $set: { online: online } }, false);
         });
     });
 };

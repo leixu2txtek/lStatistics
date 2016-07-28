@@ -93,12 +93,12 @@ var client = {
             });
         });
     },
-    update: function (collection, query, data, callback) {
+    update: function (collection, query, data, upsert, callback) {
 
         var _this = this;
         _this.connect(function (db) {
 
-            db.collection(collection).updateOne(query, data, { upsert: true, w: 1 }, function (err, result) {
+            db.collection(collection).updateOne(query, data, { upsert: upsert || false, w: 1 }, function (err, result) {
 
                 if (!!err) {
                     console.error('Mongo update error: %s', err.stack);
